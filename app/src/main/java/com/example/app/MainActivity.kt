@@ -15,6 +15,7 @@ import android.app.Activity
 import android.net.Uri
 import androidx.activity.result.contract.ActivityResultContracts
 import android.os.Environment
+import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.FileProvider
 import java.io.File
@@ -22,9 +23,12 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 class MainActivity : AppCompatActivity() {
-    private lateinit var imageView: ImageView
-    private lateinit var buttonImage: Button
-    private var currentPhotoUri: Uri? = null
+     lateinit var traffic_result: TextView
+     lateinit var imageView: ImageView
+     lateinit var buttonImage: Button
+     var currentPhotoUri: Uri? = null
+
+
 
     private val CAMERA_PERMISSION_CODE = 100
 
@@ -32,6 +36,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        traffic_result  =findViewById<TextView>(R.id.traffic_result)
         imageView = findViewById(R.id.imageView)
         buttonImage = findViewById(R.id.buttonImage)
 
