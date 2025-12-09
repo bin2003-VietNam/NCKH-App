@@ -25,6 +25,26 @@ class MainActivity : AppCompatActivity() {
     private lateinit var yolo: YoloManager
     private lateinit var textView: TextView
 
+    private val labels = listOf(
+        "ben_xe_buyt",
+        "cam_di_nguoc_chieu",
+        "cam_do_xe",
+        "cam_dung_cam_do_xe",
+        "cam_queo_phai",
+        "cam_queo_trai",
+        "cam_xe_container",
+        "cam_xe_o_to",
+        "cam_xe_tai",
+        "di_cham",
+        "duong_nguoi_di_bo_cat_ngang",
+        "giao_nhau_voi_duong_khong_uu_tien",
+        "huong_phai_di_vong_chuong_ngai_vat",
+        "toc_do_toi_da_cho_phep_50km",
+        "toc_do_toi_da_cho_phep_60km",
+        "tre_em"
+    )
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -55,21 +75,25 @@ class MainActivity : AppCompatActivity() {
                 .build()
 
             imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
-
                 val bitmap = imageProxyToBitmap(imageProxy)
-//                Log.d("DEBUG", "bitmap = ${bitmap.width}x${bitmap.height}")
 
+                // Inference chạy ở background → tốt
                 val detections = yolo.predict(bitmap)
                 Log.d("DEBUG", detections.toString())
-                if (detections.isNotEmpty()) {
-//                    textView.text =  "${detections[0].cls}"
-                    textView.text = detections.toString()
-                } else {
-//                    textView.text =  "No object"
-                    textView.text = detections.toString()
 
+                // === TẤT CẢ CẬP NHẬT UI PHẢI VỀ MAIN THREAD ===
+                runOnUiThread {
+                    if (detections.isNotEmpty()) {
+                        // Lấy biển báo có độ tin cậy cao nhất
+                        val best = detections.maxByOrNull { it.score }!!
+                        textView.text = labels[best.cls]
+                        // Ví dụ hiển thị: "Cấm đỗ & dừng xe"
+                    } else {
+                        textView.text = "Không phát hiện biển báo"
+                    }
+
+                    // Cập nhật khung vẽ (nếu bạn có overlay)
                 }
-
 
                 imageProxy.close()
             }
