@@ -1,150 +1,84 @@
 package com.example.app
 
-import android.Manifest
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Bundle
-import android.provider.MediaStore
-import android.widget.Button
-import android.widget.ImageView
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
-import android.app.Activity
-import android.net.Uri
-import androidx.activity.result.contract.ActivityResultContracts
-import android.os.Environment
-import android.widget.TextView
-import androidx.core.app.ActivityCompat
-import androidx.core.content.FileProvider
 import java.io.File
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.*
+
 class MainActivity : AppCompatActivity() {
-     lateinit var traffic_result: TextView
-     lateinit var imageView: ImageView
-     lateinit var buttonImage: Button
-     var currentPhotoUri: Uri? = null
 
-
-
-    private val CAMERA_PERMISSION_CODE = 100
+    private lateinit var previewView: PreviewView
+    private lateinit var imageCapture: ImageCapture   // CameraX chụp ảnh
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        traffic_result  =findViewById<TextView>(R.id.traffic_result)
-        imageView = findViewById(R.id.imageView)
-        buttonImage = findViewById(R.id.buttonImage)
+        previewView = findViewById(R.id.previewView)
 
-        buttonImage.setOnClickListener {
-            checkCameraPermission()
-        }
+        // Khởi động camera
+        startCamera()
+
+        // Nếu bạn muốn chụp ảnh ngay lập tức khi mở app:
+        // capturePhoto()
     }
 
-    private fun checkCameraPermission() {
-        when {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED -> {
-                // Permission đã được cấp, mở camera
-                openCamera()
-            }
-            shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) -> {
-                // Giải thích tại sao cần permission
-                Toast.makeText(
-                    this,
-                    "Cần quyền Camera để chụp ảnh",
-                    Toast.LENGTH_SHORT
-                ).show()
-                requestCameraPermission()
-            }
-            else -> {
-                // Yêu cầu permission lần đầu
-                requestCameraPermission()
-            }
-        }
-    }
+    private fun startCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
-    private fun requestCameraPermission() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.CAMERA),
-            CAMERA_PERMISSION_CODE
-        )
-    }
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        if (requestCode == CAMERA_PERMISSION_CODE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Permission được cấp
-                openCamera()
-            } else {
-                // Permission bị từ chối
-                Toast.makeText(
-                    this,
-                    "Không thể chụp ảnh nếu không cấp quyền Camera",
-                    Toast.LENGTH_LONG
-                ).show()
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
             }
-        }
-    }
 
-    private fun openCamera() {
-        val photoFile = createImageFile()
-        photoFile?.let {
-            currentPhotoUri = FileProvider.getUriForFile(
-                this,
-                "${packageName}.fileprovider",
-                it
+            imageCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .setTargetRotation(previewView.display.rotation)
+                .build()
+
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(
+                this, cameraSelector, preview, imageCapture
             )
 
-            val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-            takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri)
-
-            try {
-                cameraLauncher.launch(takePictureIntent)
-            } catch (e: ActivityNotFoundException) {
-                Toast.makeText(this, "Không tìm thấy ứng dụng camera", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Toast.makeText(this, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
+        }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun createImageFile(): File? {
-        return try {
-            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-            val storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-            File.createTempFile("IMG_${timeStamp}_", ".jpg", storageDir)
-        } catch (e: IOException) {
-            Toast.makeText(this, "Không thể tạo file: ${e.message}", Toast.LENGTH_SHORT).show()
-            null
-        }
-    }
+    fun capturePhoto() {
+        val file = File(externalCacheDir, "photo.jpg")
+        val output = ImageCapture.OutputFileOptions.Builder(file).build()
 
-    private val cameraLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            currentPhotoUri?.let { uri ->
-                try {
-                    imageView.setImageURI(uri)
-                    Toast.makeText(this, "Chụp ảnh thành công!", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Lỗi hiển thị ảnh: ${e.message}", Toast.LENGTH_SHORT).show()
+        imageCapture.takePicture(
+            output,
+            ContextCompat.getMainExecutor(this),
+            object : ImageCapture.OnImageSavedCallback {
+
+                override fun onError(exc: ImageCaptureException) {
+                    Log.e("CameraX", "Lỗi chụp ảnh: ${exc.message}")
+                }
+
+                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+
+                    // Gọi YOLO ở đây
+                    // val result = yolo.predict(bitmap)
+
+                    Toast.makeText(this@MainActivity, "Đã chụp ảnh!", Toast.LENGTH_SHORT).show()
                 }
             }
-        }
+        )
     }
 }
