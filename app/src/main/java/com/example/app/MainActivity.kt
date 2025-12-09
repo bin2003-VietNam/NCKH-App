@@ -1,35 +1,40 @@
 package com.example.app
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import android.os.Bundle
 import android.util.Log
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
+import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
-    private lateinit var imageCapture: ImageCapture   // CameraX chụp ảnh
+    private lateinit var imageCapture: ImageCapture
+    private lateinit var yolo: YoloManager
+    private lateinit var textView: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         previewView = findViewById(R.id.previewView)
+        textView = findViewById(R.id.textView)
 
-        // Khởi động camera
+        yolo = YoloManager(this)
+
         startCamera()
-
-        // Nếu bạn muốn chụp ảnh ngay lập tức khi mở app:
-        // capturePhoto()
     }
 
     private fun startCamera() {
@@ -42,6 +47,34 @@ class MainActivity : AppCompatActivity() {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
 
+            // ----------------------
+            // ImageAnalysis (YOLO)
+            // ----------------------
+            val imageAnalysis = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+
+            imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
+
+                val bitmap = imageProxyToBitmap(imageProxy)
+//                Log.d("DEBUG", "bitmap = ${bitmap.width}x${bitmap.height}")
+
+                val detections = yolo.predict(bitmap)
+                Log.d("DEBUG", detections.toString())
+                if (detections.isNotEmpty()) {
+//                    textView.text =  "${detections[0].cls}"
+                    textView.text = detections.toString()
+                } else {
+//                    textView.text =  "No object"
+                    textView.text = detections.toString()
+
+                }
+
+
+                imageProxy.close()
+            }
+
+            // Chụp ảnh
             imageCapture = ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                 .setTargetRotation(previewView.display.rotation)
@@ -50,35 +83,46 @@ class MainActivity : AppCompatActivity() {
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             cameraProvider.unbindAll()
+
+            // 🔥 QUAN TRỌNG: phải bind imageAnalysis vào camera
             cameraProvider.bindToLifecycle(
-                this, cameraSelector, preview, imageCapture
+                this, cameraSelector, preview, imageAnalysis, imageCapture
             )
+
 
         }, ContextCompat.getMainExecutor(this))
     }
 
-    fun capturePhoto() {
-        val file = File(externalCacheDir, "photo.jpg")
-        val output = ImageCapture.OutputFileOptions.Builder(file).build()
+    // ----------------------------
+    // Convert ImageProxy → Bitmap
+    // ----------------------------
+    private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
+        val planes = image.planes
+        val yBuffer = planes[0].buffer
+        val uBuffer = planes[1].buffer
+        val vBuffer = planes[2].buffer
 
-        imageCapture.takePicture(
-            output,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
+        val ySize = yBuffer.remaining()
+        val uSize = uBuffer.remaining()
+        val vSize = vBuffer.remaining()
 
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e("CameraX", "Lỗi chụp ảnh: ${exc.message}")
-                }
+        val nv21 = ByteArray(ySize + uSize + vSize)
+        yBuffer.get(nv21, 0, ySize)
+        vBuffer.get(nv21, ySize, vSize)
+        uBuffer.get(nv21, ySize + vSize, uSize)
 
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+        val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
+        val out = ByteArrayOutputStream()
+        yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 100, out)
+        val jpegBytes = out.toByteArray()
 
-                    // Gọi YOLO ở đây
-                    // val result = yolo.predict(bitmap)
+        var bmp = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
 
-                    Toast.makeText(this@MainActivity, "Đã chụp ảnh!", Toast.LENGTH_SHORT).show()
-                }
-            }
-        )
+        // 🔥 Fix crash do xoay ảnh
+        val matrix = android.graphics.Matrix()
+        matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
+        bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+
+        return bmp
     }
 }
