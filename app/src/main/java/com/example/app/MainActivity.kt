@@ -6,20 +6,20 @@ import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.ui.text.intl.Locale
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
-import java.io.File
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
-
+    private  var tts: TextToSpeech? = null
     private lateinit var previewView: PreviewView
     private lateinit var imageCapture: ImageCapture
     private lateinit var yolo: YoloManager
@@ -51,10 +51,35 @@ class MainActivity : AppCompatActivity() {
 
         previewView = findViewById(R.id.previewView)
         textView = findViewById(R.id.textView)
-
+        tts = TextToSpeech(this, this)
         yolo = YoloManager(this)
 
         startCamera()
+    }
+
+     fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            val result = tts!!.setLanguage(Locale.US)
+
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.e("TTS","The Language not supported!")
+            } else {
+
+            }
+        }
+    }
+    private fun speakOut(text: String) {
+        tts!!.speak(text, TextToSpeech.QUEUE_FLUSH, null,"")
+    }
+
+    public override fun onDestroy() {
+        // Shutdown TTS when
+        // activity is destroyed
+        if (tts != null) {
+            tts!!.stop()
+            tts!!.shutdown()
+        }
+        super.onDestroy()
     }
 
     private fun startCamera() {
