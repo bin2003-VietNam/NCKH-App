@@ -11,14 +11,12 @@ import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 import kotlin.math.max
 import kotlin.math.min
+import androidx.core.graphics.scale
 
 class YoloManager(private val context: Context) {
-
     private val inputSize = 640 // model input size
     private lateinit var interpreter: Interpreter
     private var isLoaded = false
-
-    // labels (16 classes)
     private val labels = listOf(
         "ben_xe_buyt",
         "cam_di_nguoc_chieu",
@@ -37,7 +35,6 @@ class YoloManager(private val context: Context) {
         "toc_do_toi_da_cho_phep_60km",
         "tre_em"
     )
-
     private val scoreThreshold = 0.40f
     private val iouThreshold = 0.45f
 
@@ -74,8 +71,8 @@ class YoloManager(private val context: Context) {
     fun predict(bitmap: Bitmap): List<Detection> {
         if (!isLoaded) return emptyList()
 
-        // Resize to model input
-        val inputBmp = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
+        // resize picture on scale 640x640
+        val inputBmp = bitmap.scale(inputSize, inputSize)
 
         // Prepare input ByteBuffer (NHWC, float32)
         val bytePerChannel = 4
@@ -130,7 +127,11 @@ class YoloManager(private val context: Context) {
      *   channels = 4 (cx,cy,w,h) + nc (classes)
      * class scores start at index 4
      */
-    private fun postProcessRaw(output: Array<Array<FloatArray>>, origWidth: Int, origHeight: Int): List<Detection> {
+    private fun postProcessRaw(
+                                output: Array<Array<FloatArray>>,
+                                origWidth: Int,
+                                origHeight: Int
+                            ): List<Detection> {
         val results = mutableListOf<Detection>()
         val channels = output[0].size  // 20
         val numBoxes = output[0][0].size  // 8400
@@ -183,7 +184,10 @@ class YoloManager(private val context: Context) {
         return filtered
     }
     // Standard greedy NMS
-    private fun nonMaxSuppression(dets: List<Detection>, iouThresh: Float = 0.45f): List<Detection> {
+    private fun nonMaxSuppression(
+                                dets: List<Detection>,
+                                iouThresh: Float = iouThreshold
+                                ): List<Detection> {
         val out = mutableListOf<Detection>()
         val sorted = dets.sortedByDescending { it.score }.toMutableList()
 
@@ -202,7 +206,10 @@ class YoloManager(private val context: Context) {
         return out
     }
 
-    private fun iou(a: Detection, b: Detection): Float {
+    private fun iou(
+                    a: Detection,
+                    b: Detection
+                    ): Float {
         val x1 = max(a.x1, b.x1)
         val y1 = max(a.y1, b.y1)
         val x2 = min(a.x2, b.x2)
@@ -220,7 +227,9 @@ class YoloManager(private val context: Context) {
     /**
      * Convenience: return top-1 label or empty string
      */
-    fun predictLabel(bitmap: Bitmap): String {
+    fun predictLabel(
+                    bitmap: Bitmap
+                    ): String {
         val dets = predict(bitmap)
         if (dets.isEmpty()) return ""
         val top = dets.maxByOrNull { it.score } ?: return ""

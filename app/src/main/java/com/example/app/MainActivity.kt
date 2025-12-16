@@ -6,44 +6,39 @@ import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
-import android.util.Log
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.ui.text.intl.Locale
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
-    private  var tts: TextToSpeech? = null
     private lateinit var previewView: PreviewView
     private lateinit var imageCapture: ImageCapture
     private lateinit var yolo: YoloManager
     private lateinit var textView: TextView
 
-    private val labels = listOf(
-        "ben_xe_buyt",
-        "cam_di_nguoc_chieu",
-        "cam_do_xe",
-        "cam_dung_cam_do_xe",
-        "cam_queo_phai",
-        "cam_queo_trai",
-        "cam_xe_container",
-        "cam_xe_o_to",
-        "cam_xe_tai",
-        "di_cham",
-        "duong_nguoi_di_bo_cat_ngang",
-        "giao_nhau_voi_duong_khong_uu_tien",
-        "huong_phai_di_vong_chuong_ngai_vat",
-        "toc_do_toi_da_cho_phep_50km",
-        "toc_do_toi_da_cho_phep_60km",
-        "tre_em"
+    private val vietnamLabel = mapOf(
+        "ben_xe_buyt" to "Bến xe buýt",
+        "cam_di_nguoc_chieu" to "Cấm đi ngược chiều",
+        "cam_do_xe" to "Cấm đỗ xe",
+        "cam_dung_cam_do_xe" to "Cấm dừng và đỗ xe",
+        "cam_queo_phai" to "Cấm quẹo phải",
+        "cam_queo_trai" to "Cấm quẹo trái",
+        "cam_xe_container" to "Cấm xe container",
+        "cam_xe_o_to" to "Cấm xe ô tô",
+        "cam_xe_tai" to "Cấm xe tải",
+        "di_cham" to "Đi chậm",
+        "duong_nguoi_di_bo_cat_ngang" to "Đường người đi bộ cắt ngang",
+        "giao_nhau_voi_duong_khong_uu_tien" to "Giao nhau với đường không ưu tiên",
+        "huong_phai_di_vong_chuong_ngai_vat" to "Hướng phải đi vòng chướng ngại vật",
+        "toc_do_toi_da_cho_phep_50km" to "Tốc độ tối đa cho phép 50 km/h",
+        "toc_do_toi_da_cho_phep_60km" to "Tốc độ tối đa cho phép 60 km/h",
+        "tre_em" to "Trẻ em"
     )
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,100 +46,51 @@ class MainActivity : AppCompatActivity() {
 
         previewView = findViewById(R.id.previewView)
         textView = findViewById(R.id.textView)
-        tts = TextToSpeech(this, this)
+//        tts = TextToSpeech(this, this)
         yolo = YoloManager(this)
 
         startCamera()
     }
 
-     fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            val result = tts!!.setLanguage(Locale.US)
-
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                Log.e("TTS","The Language not supported!")
-            } else {
-
-            }
-        }
-    }
-    private fun speakOut(text: String) {
-        tts!!.speak(text, TextToSpeech.QUEUE_FLUSH, null,"")
-    }
-
-    public override fun onDestroy() {
-        // Shutdown TTS when
-        // activity is destroyed
-        if (tts != null) {
-            tts!!.stop()
-            tts!!.shutdown()
-        }
-        super.onDestroy()
-    }
-
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
-
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
-
-            // ----------------------
             // ImageAnalysis (YOLO)
-            // ----------------------
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
 
             imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
                 val bitmap = imageProxyToBitmap(imageProxy)
-
-                // Inference chạy ở background → tốt
-                val detections = yolo.predict(bitmap)
-                Log.d("DEBUG", detections.toString())
-
-                // === TẤT CẢ CẬP NHẬT UI PHẢI VỀ MAIN THREAD ===
+                val label = yolo.predictLabel(bitmap)
                 runOnUiThread {
-                    if (detections.isNotEmpty()) {
-                        // Lấy biển báo có độ tin cậy cao nhất
-                        val best = detections.maxByOrNull { it.score }!!
-                        textView.text = labels[best.cls]
-                        // Ví dụ hiển thị: "Cấm đỗ & dừng xe"
+                    if (label.isNotEmpty()) {
+                        textView.text = vietnamLabel[label]
                     } else {
                         textView.text = "Không phát hiện biển báo"
                     }
-
-                    // Cập nhật khung vẽ (nếu bạn có overlay)
                 }
-
                 imageProxy.close()
             }
-
             // Chụp ảnh
             imageCapture = ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                 .setTargetRotation(previewView.display.rotation)
                 .build()
-
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
             cameraProvider.unbindAll()
-
-            // 🔥 QUAN TRỌNG: phải bind imageAnalysis vào camera
             cameraProvider.bindToLifecycle(
                 this, cameraSelector, preview, imageAnalysis, imageCapture
             )
-
-
         }, ContextCompat.getMainExecutor(this))
     }
 
-    // ----------------------------
+
     // Convert ImageProxy → Bitmap
-    // ----------------------------
     private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
         val planes = image.planes
         val yBuffer = planes[0].buffer
