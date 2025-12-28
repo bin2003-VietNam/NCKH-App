@@ -1,5 +1,6 @@
 package com.example.app
 
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
@@ -13,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 import java.util.Locale
@@ -26,6 +28,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tts: TextToSpeech
 
     private var history = History()
+    private  val CAMERA_PERMISSION_REQUEST = 1001
 
 
     private val vietnamLabel = mapOf(
@@ -64,7 +67,33 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        startCamera()
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.CAMERA),
+                CAMERA_PERMISSION_REQUEST
+            )
+        } else {
+            startCamera()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CAMERA_PERMISSION_REQUEST &&
+            grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        ) {
+            startCamera()
+        } else {
+            Toast.makeText(this, "Camera permission denied", Toast.LENGTH_LONG).show()
+        }
     }
 
     val COOLDOWN_MS = 5_000L
