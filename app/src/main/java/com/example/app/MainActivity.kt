@@ -19,6 +19,8 @@ import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 import java.util.Locale
 import java.util.concurrent.Executors
+import android.util.Log
+
 
 class MainActivity : AppCompatActivity() {
     private lateinit var previewView: PreviewView
@@ -26,7 +28,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var yolo: YoloManager
     private lateinit var textView: TextView
     private lateinit var tts: TextToSpeech
-
     private var history = History()
     private  val CAMERA_PERMISSION_REQUEST = 1001
 
@@ -56,7 +57,6 @@ class MainActivity : AppCompatActivity() {
 
         previewView = findViewById(R.id.previewView)
         textView = findViewById(R.id.textView)
-//        tts = TextToSpeech(this, this)
         yolo = YoloManager(this)
         tts = TextToSpeech(this){status->
             if(status == TextToSpeech.SUCCESS){
@@ -112,7 +112,11 @@ class MainActivity : AppCompatActivity() {
 
             imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
                 val bitmap = imageProxyToBitmap(imageProxy)
+//                val startTime = System.nanoTime()   // ⏱ bắt đầu
                 val label_yolo = yolo.predictLabel(bitmap)
+//                val endTime = System.nanoTime()     // ⏱ kết thúc
+//                val inferTimeMs = (endTime - startTime) / 1_000_000.0
+//                Log.d("time", inferTimeMs.toString())
                 val label_text_string = vietnamLabel[label_yolo].toString()
                 val current_time =  System.currentTimeMillis()
                 runOnUiThread {
@@ -153,8 +157,6 @@ class MainActivity : AppCompatActivity() {
             )
         }, ContextCompat.getMainExecutor(this))
     }
-
-
     // Convert ImageProxy → Bitmap
     private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
         val planes = image.planes
@@ -175,10 +177,7 @@ class MainActivity : AppCompatActivity() {
         val out = ByteArrayOutputStream()
         yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 100, out)
         val jpegBytes = out.toByteArray()
-
         var bmp = BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
-
-        // 🔥 Fix crash do xoay ảnh
         val matrix = android.graphics.Matrix()
         matrix.postRotate(image.imageInfo.rotationDegrees.toFloat())
         bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)

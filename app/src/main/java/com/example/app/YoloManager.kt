@@ -14,7 +14,7 @@ import kotlin.math.min
 import androidx.core.graphics.scale
 
 class YoloManager(private val context: Context) {
-    private val inputSize = 640 // model input size
+    private val inputSize = 640
     private lateinit var interpreter: Interpreter
     private var isLoaded = false
     private val labels = listOf(
@@ -65,9 +65,6 @@ class YoloManager(private val context: Context) {
         }
     }
 
-    /**
-     * Predict -> returns list of Detection with coordinates in original bitmap pixels
-     */
     fun predict(bitmap: Bitmap): List<Detection> {
         if (!isLoaded) return emptyList()
 
@@ -82,6 +79,7 @@ class YoloManager(private val context: Context) {
 
         val pixels = IntArray(inputSize * inputSize)
         inputBmp.getPixels(pixels, 0, inputSize, 0, 0, inputSize, inputSize)
+        Log.d("pixel", pixels.indices.toString())
         for (i in pixels.indices) {
             val px = pixels[i]
             // Normalize to [0,1]
@@ -121,12 +119,6 @@ class YoloManager(private val context: Context) {
         return postProcessRaw(output, bitmap.width, bitmap.height)
     }
 
-    /**
-     * Post-process raw output of shape [1, channels, numBoxes]
-     * For YOLO11 raw head we assume:
-     *   channels = 4 (cx,cy,w,h) + nc (classes)
-     * class scores start at index 4
-     */
     private fun postProcessRaw(
                                 output: Array<Array<FloatArray>>,
                                 origWidth: Int,
@@ -183,7 +175,6 @@ class YoloManager(private val context: Context) {
         Log.d("YOLO", "Detections after NMS: ${filtered.size}")
         return filtered
     }
-    // Standard greedy NMS
     private fun nonMaxSuppression(
                                 dets: List<Detection>,
                                 iouThresh: Float = iouThreshold
@@ -194,7 +185,6 @@ class YoloManager(private val context: Context) {
         while (sorted.isNotEmpty()) {
             val best = sorted.removeAt(0)
             out.add(best)
-
             val it = sorted.iterator()
             while (it.hasNext()) {
                 val other = it.next()
@@ -224,15 +214,15 @@ class YoloManager(private val context: Context) {
         return if (denom <= 0f) 0f else interArea / denom
     }
 
-    /**
-     * Convenience: return top-1 label or empty string
-     */
     fun predictLabel(
                     bitmap: Bitmap
                     ): String {
         val dets = predict(bitmap)
         if (dets.isEmpty()) return ""
+        Log.d("Top_1", dets.toString())
         val top = dets.maxByOrNull { it.score } ?: return ""
+
+        Log.d("Top", top.toString())
         return labels.getOrNull(top.cls) ?: ""
     }
 }
